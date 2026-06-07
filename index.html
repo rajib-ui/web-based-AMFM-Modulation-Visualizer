@@ -1,0 +1,2362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analog Communication Visualizer Dashboard (EC401)</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: rgba(22, 27, 34, 0.85);
+            --panel-border: rgba(240, 246, 252, 0.1);
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            
+            /* High visibility color-coded traces */
+            --color-msg: #10b981; /* Emerald Green */
+            --color-car: #06b6d4; /* Deep Cyan */
+            --color-mod: #f97316; /* Electric Orange */
+            
+            --accent-red: #ef4444;
+            --accent-yellow: #eab308;
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            
+            --glow-msg: 0 0 8px rgba(16, 185, 129, 0.3);
+            --glow-car: 0 0 8px rgba(6, 182, 212, 0.3);
+            --glow-mod: 0 0 8px rgba(249, 115, 22, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.03) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(249, 115, 22, 0.03) 0px, transparent 50%);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(22, 27, 34, 0.5);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--panel-border);
+            z-index: 10;
+        }
+
+        .header-title-area h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--text-primary) 0%, var(--color-car) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title-area p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            margin-top: 2px;
+        }
+
+        .badge-academic {
+            background: rgba(6, 182, 212, 0.08);
+            border: 1px solid rgba(6, 182, 212, 0.15);
+            color: var(--color-car);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge-pulse {
+            width: 6px;
+            height: 6px;
+            background-color: var(--color-car);
+            border-radius: 50%;
+            animation: pulse-glow 1.5s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
+            70% { transform: scale(1); opacity: 0.5; box-shadow: 0 0 0 6px rgba(6, 182, 212, 0); }
+            100% { transform: scale(1); opacity: 0; box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+        }
+
+        /* Dashboard Container */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            flex-grow: 1;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            height: calc(100vh - 70px);
+            min-height: 650px;
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+                height: auto;
+                overflow-y: auto;
+            }
+        }
+
+        /* Glass Panel */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 0.75rem 1.25rem;
+            background: rgba(33, 38, 45, 0.4);
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .panel-content {
+            padding: 1.25rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            overflow-y: auto;
+        }
+
+        .sidebar {
+            height: 100%;
+        }
+
+        /* Mode Selector Button Pill */
+        .mode-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .mode-btn {
+            background: rgba(33, 38, 45, 0.6);
+            border: 1px solid rgba(240, 246, 252, 0.05);
+            color: var(--text-secondary);
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            font-family: var(--font-main);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mode-btn:hover {
+            background: rgba(33, 38, 45, 0.9);
+            color: var(--text-primary);
+            border-color: rgba(240, 246, 252, 0.15);
+        }
+
+        .mode-btn.active {
+            background: rgba(6, 182, 212, 0.08);
+            border-color: var(--color-car);
+            color: var(--color-car);
+        }
+
+        .mode-btn.active::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background-color: var(--color-car);
+            border-radius: 50%;
+            box-shadow: var(--glow-car);
+        }
+
+        /* Sliders & Numeric Input Styling */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .control-label-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .control-label {
+            color: var(--text-secondary);
+        }
+
+        /* Styled inputs next to sliders */
+        .num-input {
+            background: rgba(13, 17, 23, 0.9);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            font-weight: 600;
+            width: 70px;
+            padding: 2px 6px;
+            text-align: right;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .num-input:focus {
+            border-color: var(--color-car);
+            box-shadow: 0 0 5px rgba(6, 182, 212, 0.3);
+        }
+
+        .num-input::-webkit-outer-spin-button,
+        .num-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .val-carrier { color: var(--color-car); }
+        .val-message { color: var(--color-msg); }
+        .val-mod { color: var(--color-mod); }
+
+        .slider-wrapper {
+            display: flex;
+            align-items: center;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(240, 246, 252, 0.1);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--text-primary);
+            box-shadow: 0 0 8px rgba(240, 246, 252, 0.3);
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border: none;
+            border-radius: 50%;
+            background: var(--text-primary);
+            box-shadow: 0 0 8px rgba(240, 246, 252, 0.3);
+            transition: transform 0.1s ease;
+            cursor: pointer;
+        }
+
+        .control-carrier input[type="range"]::-webkit-slider-thumb {
+            background: var(--color-car);
+            box-shadow: var(--glow-car);
+        }
+        .control-carrier input[type="range"]::-moz-range-thumb {
+            background: var(--color-car);
+            box-shadow: var(--glow-car);
+        }
+
+        .control-message input[type="range"]::-webkit-slider-thumb {
+            background: var(--color-msg);
+            box-shadow: var(--glow-msg);
+        }
+        .control-message input[type="range"]::-moz-range-thumb {
+            background: var(--color-msg);
+            box-shadow: var(--glow-msg);
+        }
+
+        .control-modIndex input[type="range"]::-webkit-slider-thumb {
+            background: var(--color-mod);
+            box-shadow: var(--glow-mod);
+        }
+        .control-modIndex input[type="range"]::-moz-range-thumb {
+            background: var(--color-mod);
+            box-shadow: var(--glow-mod);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.25);
+        }
+        input[type="range"]::-moz-range-thumb:hover {
+            transform: scale(1.25);
+        }
+
+        /* Phasor Card */
+        .phasor-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(13, 17, 23, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 0.8rem;
+        }
+
+        .phasor-canvas-wrapper {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin-top: 0.5rem;
+        }
+
+        #phasorCanvas {
+            background: #090d13;
+            border-radius: 6px;
+            border: 1px solid rgba(240, 246, 252, 0.05);
+        }
+
+        .phasor-labels {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            font-size: 0.65rem;
+            font-family: var(--font-mono);
+        }
+
+        .phasor-label-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .color-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Main Plot Workspace */
+        .main-workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            height: 100%;
+        }
+
+        .visualizer-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            flex-grow: 1;
+        }
+
+        @media (max-width: 900px) {
+            .visualizer-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .plot-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        /* Styled compact Zoom sliders inside the plot header */
+        .plot-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(13, 17, 23, 0.4);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(240, 246, 252, 0.05);
+        }
+
+        .zoom-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .plot-controls input[type="range"] {
+            width: 60px;
+            height: 3px;
+            background: rgba(240, 246, 252, 0.15);
+            border-radius: 1px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .plot-controls input[type="range"]::-webkit-slider-thumb {
+            width: 10px;
+            height: 10px;
+            background: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        .plot-controls input[type="range"]::-moz-range-thumb {
+            width: 10px;
+            height: 10px;
+            border: none;
+            background: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+        }
+
+        .plot-canvas-wrapper {
+            flex-grow: 1;
+            height: 300px; /* Force rigid non-zero basis */
+            position: relative;
+            background: #090d13;
+            border-radius: 8px;
+            border: 1px solid rgba(240, 246, 252, 0.05);
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+            cursor: ns-resize; /* Indicating scroll zoom action is active */
+        }
+
+        .plot-canvas-wrapper.canvas-time-wrapper {
+            cursor: ew-resize;
+        }
+
+        /* Light/Dark Scope Mode */
+        .light-scope .plot-canvas-wrapper {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .light-scope #phasorCanvas {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Theme toggle button in header control */
+        .theme-btn {
+            background: rgba(33, 38, 45, 0.6);
+            border: 1px solid var(--panel-border);
+            color: var(--text-primary);
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .theme-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Plain Text Governing Equation Box */
+        .formula-textbox {
+            background: rgba(13, 17, 23, 0.8);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .formula-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        .formula-content {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            color: #ffffff;
+            word-break: break-all;
+            background: #07090e;
+            padding: 0.6rem 0.8rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Telemetry Row */
+        .telemetry-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: rgba(22, 27, 34, 0.6);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-size: 1.15rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            margin-top: 4px;
+            color: var(--text-primary);
+        }
+
+        .stat-unit {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            margin-top: 6px;
+            align-self: flex-start;
+        }
+
+        .badge-undermod {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--color-msg);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .badge-critical {
+            background: rgba(255, 159, 0, 0.1);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(255, 159, 0, 0.2);
+        }
+
+        .badge-overmod {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            animation: blink-red 1s infinite alternate;
+        }
+
+        @keyframes blink-red {
+            0% { opacity: 0.7; }
+            100% { opacity: 1; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+        }
+
+        /* Footer Controls */
+        .footer-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1.25rem;
+            background: rgba(33, 38, 45, 0.4);
+            border-top: 1px solid var(--panel-border);
+            border-radius: 0 0 12px 12px;
+        }
+
+        .vis-toggles {
+            display: flex;
+            gap: 12px;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            border: 1px solid var(--panel-border);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn.active.msg-toggle {
+            color: var(--color-msg);
+            border-color: rgba(16, 185, 129, 0.3);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .toggle-btn.active.car-toggle {
+            color: var(--color-car);
+            border-color: rgba(6, 182, 212, 0.3);
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .toggle-btn.active.mod-toggle {
+            color: var(--color-mod);
+            border-color: rgba(249, 115, 22, 0.3);
+            background: rgba(249, 115, 22, 0.05);
+        }
+
+        .sim-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(33, 38, 45, 0.8);
+            border: 1px solid var(--panel-border);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-circle:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-circle.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-color: #ffffff;
+        }
+
+        .tooltip-data {
+            position: absolute;
+            background: rgba(13, 17, 23, 0.95);
+            border: 1px solid var(--panel-border);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: #ffffff;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+        }
+        
+        .light-scope .tooltip-data {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: rgba(0, 0, 0, 0.15);
+            color: #000000;
+        }
+
+        .telemetry-input {
+            background: rgba(13, 17, 23, 0.4);
+            border: 1px solid rgba(240, 246, 252, 0.1);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 1.15rem;
+            font-weight: 700;
+            width: 90px;
+            padding: 2px 6px;
+            text-align: left;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .telemetry-input:focus {
+            border-color: var(--color-car);
+            background: rgba(13, 17, 23, 0.9);
+            box-shadow: 0 0 5px rgba(6, 182, 212, 0.3);
+        }
+
+        .telemetry-input::-webkit-outer-spin-button,
+        .telemetry-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .light-scope .telemetry-input {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: rgba(0, 0, 0, 0.15);
+            color: #2d3748;
+        }
+
+        .light-scope .telemetry-input:focus {
+            border-color: var(--color-car);
+            background: #ffffff;
+            box-shadow: 0 0 5px rgba(6, 182, 212, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title-area">
+            <h1>Analog Communication Visualizer Dashboard</h1>
+            <p>ELITE ACADEMIC DESIGN COMPLIANCE // COURSE CODE: EC401</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button class="theme-btn" id="btnScopeTheme">Scope Theme: Dark</button>
+            <div class="badge-academic">
+                <div class="badge-pulse"></div>
+                <span>LIVE WAVEFORM SOLVER</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+        <!-- Sidebar Controls -->
+        <div class="glass-panel sidebar">
+            <div class="panel-header">
+                <h2>Parameters & Modes</h2>
+            </div>
+            <div class="panel-content">
+                <!-- Modulation Modes -->
+                <div class="control-group">
+                    <label class="control-label" style="font-size:0.75rem; text-transform:uppercase;">Modulation Scheme</label>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" data-mode="AM">
+                            AM (Double Sideband TC)
+                        </button>
+                        <button class="mode-btn" data-mode="DSB-SC">
+                            DSB-SC (Suppressed Carrier)
+                        </button>
+                        <button class="mode-btn" data-mode="SSB">
+                            SSB (Single Sideband - USB)
+                        </button>
+                        <button class="mode-btn" data-mode="FM">
+                            FM (Frequency Modulated)
+                        </button>
+                        <button class="mode-btn" data-mode="PM">
+                            PM (Phase Modulated)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Slider & Input Parameters -->
+                <div class="control-group control-carrier">
+                    <div class="control-label-area">
+                        <span class="control-label">Carrier Amplitude (A<sub>c</sub>)</span>
+                        <div style="display:flex; align-items:center; gap:2px;">
+                            <input type="number" id="inputAc" min="0.01" max="10.0" step="0.01" value="2.0" class="num-input val-carrier">
+                            <span class="val-carrier" style="font-size:0.75rem;">V</span>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="sliderAc" min="0.01" max="10.0" step="0.01" value="2.0">
+                    </div>
+                </div>
+
+                <div class="control-group control-carrier">
+                    <div class="control-label-area">
+                        <span class="control-label">Carrier Frequency (f<sub>c</sub>)</span>
+                        <div style="display:flex; align-items:center; gap:2px;">
+                            <input type="number" id="inputFc" min="1" max="500" step="1" value="40" class="num-input val-carrier">
+                            <span class="val-carrier" style="font-size:0.75rem;">Hz</span>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="sliderFc" min="1" max="500" step="1" value="40">
+                    </div>
+                </div>
+
+                <div class="control-group control-message">
+                    <div class="control-label-area">
+                        <span class="control-label">Message Amplitude (A<sub>m</sub>)</span>
+                        <div style="display:flex; align-items:center; gap:2px;">
+                            <input type="number" id="inputAm" min="0.0" max="10.0" step="0.05" value="1.0" class="num-input val-message">
+                            <span class="val-message" style="font-size:0.75rem;">V</span>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="sliderAm" min="0.0" max="10.0" step="0.05" value="1.0">
+                    </div>
+                </div>
+
+                <div class="control-group control-message">
+                    <div class="control-label-area">
+                        <span class="control-label">Message Frequency (f<sub>m</sub>)</span>
+                        <div style="display:flex; align-items:center; gap:2px;">
+                            <input type="number" id="inputFm" min="0.2" max="50.0" step="0.1" value="2.0" class="num-input val-message">
+                            <span class="val-message" style="font-size:0.75rem;">Hz</span>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="sliderFm" min="0.2" max="50.0" step="0.1" value="2.0">
+                    </div>
+                </div>
+
+                <div class="control-group control-modIndex">
+                    <div class="control-label-area">
+                        <span class="control-label" id="labelModIndex">Modulation Index (μ)</span>
+                        <div style="display:flex; align-items:center; gap:2px;">
+                            <input type="number" id="inputModIndex" min="0.0" max="10.0" step="0.02" value="0.5" class="num-input val-mod">
+                            <span class="val-mod" id="unitModIndex" style="font-size:0.75rem;"></span>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="sliderModIndex" min="0.0" max="2.0" step="0.02" value="0.5">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-area">
+                        <span class="control-label">Channel Noise (AWGN)</span>
+                        <div style="display:flex; align-items:center; gap:2px;">
+                            <input type="number" id="inputNoise" min="0.0" max="0.5" step="0.02" value="0.0" class="num-input">
+                            <span style="font-size:0.65rem; color: var(--text-secondary);">V<sub>rms</sub></span>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" id="sliderNoise" min="0.0" max="0.5" step="0.02" value="0.0">
+                    </div>
+                </div>
+
+                <!-- Phasor Diagram Area -->
+                <div class="phasor-container">
+                    <span class="control-label" style="font-size:0.75rem; text-transform:uppercase; margin-bottom: 0.5rem;">Live Phasor Diagram</span>
+                    <div class="phasor-canvas-wrapper">
+                        <!-- Explicit inline sizes to prevent sizing bugs -->
+                        <canvas id="phasorCanvas" width="180" height="180"></canvas>
+                    </div>
+                    <div class="phasor-labels">
+                        <div class="phasor-label-item">
+                            <span class="color-dot" id="dotPhasorCar" style="background-color: var(--color-car);"></span>
+                            <span>Carrier</span>
+                        </div>
+                        <div class="phasor-label-item" id="phasorLabelSb">
+                            <span class="color-dot" id="dotPhasorSb" style="background-color: var(--color-msg);"></span>
+                            <span>Sidebands</span>
+                        </div>
+                        <div class="phasor-label-item">
+                            <span class="color-dot" style="background-color: var(--color-mod); border: 1px solid rgba(249,115,22,0.5);"></span>
+                            <span>Net s(t)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Plots and Telemetry Dashboard -->
+        <div class="main-workspace">
+            
+            <div class="visualizer-section">
+                <!-- Time-Domain Panel -->
+                <div class="glass-panel plot-panel">
+                    <div class="panel-header">
+                        <h2>Time-Domain Oscilloscope (t)</h2>
+                        <div class="plot-controls">
+                            <div class="zoom-slider-container">
+                                <span style="font-size:0.65rem; color:var(--text-secondary);">X-Zoom:</span>
+                                <input type="range" id="zoomSliderTimeX" min="0.25" max="50.0" step="0.05" value="1.0">
+                            </div>
+                            <div class="zoom-slider-container">
+                                <span style="font-size:0.65rem; color:var(--text-secondary);">Y-Zoom:</span>
+                                <input type="range" id="zoomSliderTimeY" min="0.25" max="10.0" step="0.05" value="1.0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plot-canvas-wrapper canvas-time-wrapper">
+                        <!-- Explicit sizes in canvas attributes to ensure visibility -->
+                        <canvas id="timeDomainCanvas" width="600" height="300"></canvas>
+                    </div>
+                </div>
+
+                <!-- Frequency-Domain Panel -->
+                <div class="glass-panel plot-panel">
+                    <div class="panel-header">
+                        <h2>Frequency-Domain Spectrum (f)</h2>
+                        <div class="plot-controls">
+                            <div class="zoom-slider-container">
+                                <span style="font-size:0.65rem; color:var(--text-secondary);">F-Zoom:</span>
+                                <input type="range" id="zoomSliderFreqX" min="0.25" max="50.0" step="0.05" value="1.0">
+                            </div>
+                            <div class="zoom-slider-container">
+                                <span style="font-size:0.65rem; color:var(--text-secondary);">Y-Zoom:</span>
+                                <input type="range" id="zoomSliderFreqY" min="0.25" max="10.0" step="0.05" value="1.0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plot-canvas-wrapper">
+                        <!-- Explicit sizes in canvas attributes to ensure visibility -->
+                        <canvas id="freqDomainCanvas" width="600" height="300"></canvas>
+                        <div class="tooltip-data" id="freqTooltip"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mathematical model equation rendering text box -->
+            <div class="formula-textbox">
+                <span class="formula-label">Active Mathematical Model</span>
+                <div class="formula-content" id="mathEquation">s(t) = Ac * [1 + μ * cos(2π * f_m * t)] * cos(2π * f_c * t)</div>
+            </div>
+
+            <!-- Telemetry Block + Dynamic Badge System -->
+            <div class="glass-panel" style="flex-grow: 0;">
+                <div class="panel-header">
+                    <h2>Academic Laboratory Telemetry Dashboard (EC401 Standards)</h2>
+                </div>
+                <div class="panel-content" style="gap: 1rem;">
+                    <div class="telemetry-row">
+                        <!-- Modulation Status -->
+                        <div class="stat-card">
+                            <span class="stat-label">Modulation Status</span>
+                            <span class="stat-value" id="telemetryStatus" style="font-size: 0.95rem; margin-top: 8px;">UNDERMODULATION</span>
+                            <span class="badge-status badge-undermod" id="badgeModStatus">μ < 1.0</span>
+                        </div>
+
+                        <!-- Carrier Power -->
+                        <div class="stat-card">
+                            <span class="stat-label">Carrier Power (P<sub>c</sub>)</span>
+                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="number" id="inputPc" min="0" max="100" step="0.01" value="2.00" class="telemetry-input">
+                                <span class="stat-unit">W</span>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">P<sub>c</sub> = A<sub>c</sub><sup>2</sup> / 2</span>
+                        </div>
+
+                        <!-- Sideband Power -->
+                        <div class="stat-card">
+                            <span class="stat-label">Sideband Power (P<sub>sb</sub>)</span>
+                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="number" id="inputPsb" min="0" max="100" step="0.01" value="0.25" class="telemetry-input">
+                                <span class="stat-unit">W</span>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">Total Sideband</span>
+                        </div>
+
+                        <!-- Total Power -->
+                        <div class="stat-card">
+                            <span class="stat-label">Total Power (P<sub>t</sub>)</span>
+                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="number" id="inputPt" min="0" max="100" step="0.01" value="2.25" class="telemetry-input">
+                                <span class="stat-unit">W</span>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">P<sub>c</sub> + P<sub>sb</sub></span>
+                        </div>
+
+                        <!-- Efficiency -->
+                        <div class="stat-card">
+                            <span class="stat-label">Transmission Efficiency (η)</span>
+                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="number" id="inputEfficiency" min="0" max="100" step="0.1" value="11.1" class="telemetry-input">
+                                <span class="stat-unit">%</span>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">P<sub>sb</sub> / P<sub>t</sub></span>
+                        </div>
+
+                        <!-- Carson's Bandwidth -->
+                        <div class="stat-card" id="cardFmDev">
+                            <span class="stat-label">Carson Bandwidth (B)</span>
+                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="number" id="inputBw" min="0.1" max="1000" step="0.01" value="4.00" class="telemetry-input">
+                                <span class="stat-unit">Hz</span>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;" id="telemetryLabelBw">2(f<sub>m</sub> + Δf)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Toggles & Animation speed -->
+                <div class="footer-controls">
+                    <div class="vis-toggles">
+                        <button class="toggle-btn active msg-toggle" data-trace="message">
+                            <span class="color-dot" style="background-color: var(--color-msg);"></span>
+                            <span>Message m(t)</span>
+                        </button>
+                        <button class="toggle-btn active car-toggle" data-trace="carrier">
+                            <span class="color-dot" style="background-color: var(--color-car);"></span>
+                            <span>Carrier c(t)</span>
+                        </button>
+                        <button class="toggle-btn active mod-toggle" data-trace="modulated">
+                            <span class="color-dot" style="background-color: var(--color-mod);"></span>
+                            <span>Modulated s(t)</span>
+                        </button>
+                    </div>
+
+                    <div class="sim-actions">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-mono);">Simulation Clock:</span>
+                        <button class="btn-circle active" id="btnPlayPause" title="Play/Pause">
+                            <span id="playIcon">⏸</span>
+                        </button>
+                        <button class="btn-circle" id="btnReset" title="Reset Timeline">
+                            <span>🔄</span>
+                        </button>
+                        <div class="control-group" style="flex-direction:row; align-items:center; gap:8px;">
+                            <span class="control-label" style="font-size: 0.7rem;">Time Speed:</span>
+                            <input type="range" id="sliderTimeSpeed" min="0.0" max="2.0" step="0.1" value="1.0" style="width: 80px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- main app scripts -->
+    <script>
+        // Set up parameters state
+        const state = {
+            mode: 'AM', // 'AM', 'DSB-SC', 'SSB', 'FM', 'PM'
+            ac: 2.0,
+            fc: 40.0,
+            am: 1.0,
+            fm: 2.0,
+            mu: 0.5, // modulation index parameter (shared input but labeled differently)
+            noise: 0.0,
+            
+            // animation configurations
+            isPlaying: true,
+            timeSpeed: 1.0,
+            time: 0.0,
+            
+            // Zoom levels
+            zoomTimeX: 1.0,
+            zoomTimeY: 1.0,
+            zoomFreqX: 1.0,
+            zoomFreqY: 1.0,
+            
+            // Visibility toggles for time domain
+            showMsg: true,
+            showCar: true,
+            showMod: true,
+            
+            // Spectrums cursor tracking
+            hoverFreq: null,
+            hoverAmp: null,
+            
+            // Graph visual theme
+            scopeTheme: 'dark' // 'dark' or 'light'
+        };
+
+        // Cache factorial computation for speed
+        const FACTORIAL_CACHE = [1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800, 39916800, 479001600];
+        function getFactorial(n) {
+            if (n < 0) return 1;
+            if (n < FACTORIAL_CACHE.length) return FACTORIAL_CACHE[n];
+            let val = FACTORIAL_CACHE[FACTORIAL_CACHE.length - 1];
+            for (let i = FACTORIAL_CACHE.length; i <= n; i++) {
+                val *= i;
+            }
+            return val;
+        }
+
+        // Bessel function first kind J_n(x) approximation
+        function besselJ(n, x) {
+            const absoluteN = Math.abs(n);
+            let sum = 0.0;
+            const limit = 20; 
+            for (let k = 0; k < limit; k++) {
+                const numerator = Math.pow(-1, k) * Math.pow(x / 2, 2 * k + absoluteN);
+                const denominator = getFactorial(k) * getFactorial(absoluteN + k);
+                const term = numerator / denominator;
+                if (!isFinite(term)) break;
+                sum += term;
+                if (Math.abs(term) < 1e-12) break;
+            }
+            return (n < 0 && absoluteN % 2 !== 0) ? -sum : sum;
+        }
+
+        // Numerical solver to find beta/modulation index from efficiency in FM/PM
+        function solveBetaFromEfficiency(eta) {
+            let bestBeta = 0;
+            let minDiff = 1e9;
+            for (let b = 0; b <= 10.0; b += 0.05) {
+                const J0 = besselJ(0, b);
+                const curEta = 1.0 - J0 * J0;
+                const diff = Math.abs(curEta - eta);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    bestBeta = b;
+                }
+            }
+            return bestBeta;
+        }
+
+        // Setup DOM nodes
+        const dom = {
+            sliderAc: document.getElementById('sliderAc'),
+            inputAc: document.getElementById('inputAc'),
+            sliderFc: document.getElementById('sliderFc'),
+            inputFc: document.getElementById('inputFc'),
+            sliderAm: document.getElementById('sliderAm'),
+            inputAm: document.getElementById('inputAm'),
+            sliderFm: document.getElementById('sliderFm'),
+            inputFm: document.getElementById('inputFm'),
+            sliderModIndex: document.getElementById('sliderModIndex'),
+            inputModIndex: document.getElementById('inputModIndex'),
+            labelModIndex: document.getElementById('labelModIndex'),
+            unitModIndex: document.getElementById('unitModIndex'),
+            sliderNoise: document.getElementById('sliderNoise'),
+            inputNoise: document.getElementById('inputNoise'),
+            
+            mathEquation: document.getElementById('mathEquation'),
+            phasorLabelSb: document.getElementById('phasorLabelSb'),
+            dotPhasorCar: document.getElementById('dotPhasorCar'),
+            dotPhasorSb: document.getElementById('dotPhasorSb'),
+            btnScopeTheme: document.getElementById('btnScopeTheme'),
+            
+            telemetryStatus: document.getElementById('telemetryStatus'),
+            badgeModStatus: document.getElementById('badgeModStatus'),
+            inputPc: document.getElementById('inputPc'),
+            inputPsb: document.getElementById('inputPsb'),
+            inputPt: document.getElementById('inputPt'),
+            inputEfficiency: document.getElementById('inputEfficiency'),
+            inputBw: document.getElementById('inputBw'),
+            telemetryLabelBw: document.getElementById('telemetryLabelBw'),
+            cardFmDev: document.getElementById('cardFmDev'),
+            
+            btnPlayPause: document.getElementById('btnPlayPause'),
+            playIcon: document.getElementById('playIcon'),
+            btnReset: document.getElementById('btnReset'),
+            sliderTimeSpeed: document.getElementById('sliderTimeSpeed'),
+            
+            timeDomainCanvas: document.getElementById('timeDomainCanvas'),
+            freqDomainCanvas: document.getElementById('freqDomainCanvas'),
+            phasorCanvas: document.getElementById('phasorCanvas'),
+            freqTooltip: document.getElementById('freqTooltip'),
+            freqCanvasContainer: document.getElementById('freqCanvasContainer'),
+            
+            // Zoom range sliders (Bar system)
+            zoomSliderTimeX: document.getElementById('zoomSliderTimeX'),
+            zoomSliderTimeY: document.getElementById('zoomSliderTimeY'),
+            zoomSliderFreqX: document.getElementById('zoomSliderFreqX'),
+            zoomSliderFreqY: document.getElementById('zoomSliderFreqY')
+        };
+
+        // Initialize Canvas Contexts
+        const ctxs = {
+            time: dom.timeDomainCanvas.getContext('2d'),
+            freq: dom.freqDomainCanvas.getContext('2d'),
+            phasor: dom.phasorCanvas.getContext('2d')
+        };
+
+        // Resilient Canvas Resize with devicePixelRatio support for pixel-perfect lines
+        function resizeCanvases() {
+            const timeWrapper = dom.timeDomainCanvas.parentElement;
+            const freqWrapper = dom.freqDomainCanvas.parentElement;
+            const dpr = window.devicePixelRatio || 1;
+
+            const timeW = Math.max(300, timeWrapper.clientWidth || 600);
+            const timeH = Math.max(200, timeWrapper.clientHeight || 300);
+            dom.timeDomainCanvas.width = timeW * dpr;
+            dom.timeDomainCanvas.height = timeH * dpr;
+            ctxs.time.resetTransform();
+            ctxs.time.scale(dpr, dpr);
+
+            const freqW = Math.max(300, freqWrapper.clientWidth || 600);
+            const freqH = Math.max(200, freqWrapper.clientHeight || 300);
+            dom.freqDomainCanvas.width = freqW * dpr;
+            dom.freqDomainCanvas.height = freqH * dpr;
+            ctxs.freq.resetTransform();
+            ctxs.freq.scale(dpr, dpr);
+
+            const phasorCanvas = dom.phasorCanvas;
+            const pw = 180;
+            const ph = 180;
+            phasorCanvas.width = pw * dpr;
+            phasorCanvas.height = ph * dpr;
+            ctxs.phasor.resetTransform();
+            ctxs.phasor.scale(dpr, dpr);
+        }
+
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
+
+        // Theme Toggle Handler
+        dom.btnScopeTheme.addEventListener('click', () => {
+            if (state.scopeTheme === 'dark') {
+                state.scopeTheme = 'light';
+                document.body.classList.add('light-scope');
+                dom.btnScopeTheme.innerText = 'Scope Theme: Light';
+            } else {
+                state.scopeTheme = 'dark';
+                document.body.classList.remove('light-scope');
+                dom.btnScopeTheme.innerText = 'Scope Theme: Dark';
+            }
+        });
+
+        // Zoom slider (Bar System) bindings
+        dom.zoomSliderTimeX.addEventListener('input', (e) => {
+            state.zoomTimeX = parseFloat(e.target.value);
+        });
+        dom.zoomSliderTimeY.addEventListener('input', (e) => {
+            state.zoomTimeY = parseFloat(e.target.value);
+        });
+        dom.zoomSliderFreqX.addEventListener('input', (e) => {
+            state.zoomFreqX = parseFloat(e.target.value);
+        });
+        dom.zoomSliderFreqY.addEventListener('input', (e) => {
+            state.zoomFreqY = parseFloat(e.target.value);
+        });
+
+        // MOUSE SCROLL WHEEL ZOOM: scroll over canvases to zoom in/out dynamically
+        dom.timeDomainCanvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            if (e.shiftKey) {
+                // Zoom Y (Vertical)
+                state.zoomTimeY = Math.max(0.25, Math.min(10.0, state.zoomTimeY * zoomFactor));
+                dom.zoomSliderTimeY.value = state.zoomTimeY;
+            } else {
+                // Zoom X (Horizontal)
+                state.zoomTimeX = Math.max(0.25, Math.min(50.0, state.zoomTimeX * zoomFactor));
+                dom.zoomSliderTimeX.value = state.zoomTimeX;
+            }
+        });
+
+        dom.freqDomainCanvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            if (e.shiftKey) {
+                // Zoom Y (Vertical)
+                state.zoomFreqY = Math.max(0.25, Math.min(10.0, state.zoomFreqY * zoomFactor));
+                dom.zoomSliderFreqY.value = state.zoomFreqY;
+            } else {
+                // Zoom X (Horizontal Freq range)
+                state.zoomFreqX = Math.max(0.25, Math.min(50.0, state.zoomFreqX * zoomFactor));
+                dom.zoomSliderFreqX.value = state.zoomFreqX;
+            }
+        });
+
+        // Get colors matching active theme
+        function getThemeColors() {
+            if (state.scopeTheme === 'light') {
+                return {
+                    bg: '#ffffff',
+                    grid: 'rgba(0, 0, 0, 0.08)',
+                    axis: 'rgba(0, 0, 0, 0.4)',
+                    text: '#2d3748',
+                    msg: '#059669', // Distinct forest green
+                    car: '#0284c7', // Distinct sky blue
+                    mod: '#ea580c', // Distinct orange/red
+                    net: '#1e293b'
+                };
+            } else {
+                return {
+                    bg: '#090d13',
+                    grid: 'rgba(240, 246, 252, 0.04)',
+                    axis: 'rgba(240, 246, 252, 0.15)',
+                    text: '#cbd5e1',
+                    msg: '#10b981', // Glowing emerald green
+                    car: '#06b6d4', // Glowing cyan
+                    mod: '#f97316', // Glowing electric orange
+                    net: '#ffffff'
+                };
+            }
+        }
+
+        // Synchronize interface labels and input clamping
+        function updateLabels() {
+            dom.inputAc.value = state.ac.toFixed(1);
+            dom.inputFc.value = state.fc.toFixed(0);
+            dom.inputAm.value = state.am.toFixed(2);
+            dom.inputFm.value = state.fm.toFixed(1);
+            dom.inputNoise.value = state.noise.toFixed(2);
+
+            if (state.mode === 'AM') {
+                dom.labelModIndex.innerHTML = 'Modulation Index (μ)';
+                dom.unitModIndex.innerText = '';
+                dom.sliderModIndex.min = "0.0";
+                dom.sliderModIndex.max = "2.0";
+                dom.sliderModIndex.step = "0.02";
+                dom.inputModIndex.min = "0.0";
+                dom.inputModIndex.max = "2.0";
+                dom.inputModIndex.step = "0.02";
+                dom.inputModIndex.value = state.mu.toFixed(2);
+                dom.phasorLabelSb.style.display = 'flex';
+            } else if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                dom.labelModIndex.innerHTML = 'Product Factor (k)';
+                dom.unitModIndex.innerText = '';
+                dom.sliderModIndex.min = "0.0";
+                dom.sliderModIndex.max = "1.5";
+                dom.sliderModIndex.step = "0.02";
+                dom.inputModIndex.min = "0.0";
+                dom.inputModIndex.max = "1.5";
+                dom.inputModIndex.step = "0.02";
+                dom.inputModIndex.value = state.mu.toFixed(2);
+                dom.phasorLabelSb.style.display = 'flex';
+            } else if (state.mode === 'FM') {
+                dom.labelModIndex.innerHTML = 'Modulation Index (β)';
+                dom.unitModIndex.innerText = '';
+                dom.sliderModIndex.min = "0.0";
+                dom.sliderModIndex.max = "10.0";
+                dom.sliderModIndex.step = "0.1";
+                dom.inputModIndex.min = "0.0";
+                dom.inputModIndex.max = "10.0";
+                dom.inputModIndex.step = "0.1";
+                dom.inputModIndex.value = state.mu.toFixed(1);
+                dom.phasorLabelSb.style.display = 'none';
+            } else if (state.mode === 'PM') {
+                dom.labelModIndex.innerHTML = 'Phase Dev. (Δφ)';
+                dom.unitModIndex.innerText = 'rad';
+                dom.sliderModIndex.min = "0.0";
+                dom.sliderModIndex.max = "5.00";
+                dom.sliderModIndex.step = "0.05";
+                dom.inputModIndex.min = "0.0";
+                dom.inputModIndex.max = "5.00";
+                dom.inputModIndex.step = "0.05";
+                dom.inputModIndex.value = state.mu.toFixed(2);
+                dom.phasorLabelSb.style.display = 'none';
+            }
+        }
+
+        // Live inject equation template using standard textbook 2*pi*f*t notation
+        function updateEquationText() {
+            let formulaHTML = "";
+            let valuesHTML = "";
+            
+            const Ac = state.ac.toFixed(2);
+            const Am = state.am.toFixed(2);
+            const mu = state.mu.toFixed(2);
+            const fm = state.fm.toFixed(1);
+            const fc = state.fc.toFixed(1);
+            
+            switch (state.mode) {
+                case 'AM':
+                    formulaHTML = `<i>s</i>(<i>t</i>) = <i>A<sub>c</sub></i> [1 + <i>&mu;</i> cos(2&pi; <i>f<sub>m</sub> t</i>)] cos(2&pi; <i>f<sub>c</sub> t</i>)`;
+                    valuesHTML = `<i>s</i>(<i>t</i>) = ${Ac} [1 + ${mu} cos(2&pi; &middot; ${fm} &middot; <i>t</i>)] cos(2&pi; &middot; ${fc} &middot; <i>t</i>)`;
+                    break;
+                case 'DSB-SC':
+                    formulaHTML = `<i>s</i>(<i>t</i>) = <i>A<sub>c</sub> A<sub>m</sub></i> cos(2&pi; <i>f<sub>m</sub> t</i>) cos(2&pi; <i>f<sub>c</sub> t</i>)`;
+                    valuesHTML = `<i>s</i>(<i>t</i>) = ${Ac} &middot; ${Am} cos(2&pi; &middot; ${fm} &middot; <i>t</i>) cos(2&pi; &middot; ${fc} &middot; <i>t</i>)`;
+                    break;
+                case 'SSB':
+                    formulaHTML = `<i>s</i>(<i>t</i>) = 0.5 <i>A<sub>c</sub> A<sub>m</sub> &mu;</i> cos(2&pi; (<i>f<sub>c</sub></i> + <i>f<sub>m</sub></i>) <i>t</i>)`;
+                    const amp = (0.5 * state.ac * state.am * state.mu).toFixed(2);
+                    const sumF = (state.fc + state.fm).toFixed(1);
+                    valuesHTML = `<i>s</i>(<i>t</i>) = ${amp} cos(2&pi; &middot; ${sumF} &middot; <i>t</i>)`;
+                    break;
+                case 'FM':
+                    formulaHTML = `<i>s</i>(<i>t</i>) = <i>A<sub>c</sub></i> cos(2&pi; <i>f<sub>c</sub> t</i> + <i>&beta;</i> sin(2&pi; <i>f<sub>m</sub> t</i>))`;
+                    valuesHTML = `<i>s</i>(<i>t</i>) = ${Ac} cos(2&pi; &middot; ${fc} &middot; <i>t</i> + ${state.mu.toFixed(1)} sin(2&pi; &middot; ${fm} &middot; <i>t</i>))`;
+                    break;
+                case 'PM':
+                    formulaHTML = `<i>s</i>(<i>t</i>) = <i>A<sub>c</sub></i> cos(2&pi; <i>f<sub>c</sub> t</i> + <i>&Delta;&phi;</i> cos(2&pi; <i>f<sub>m</sub> t</i>))`;
+                    valuesHTML = `<i>s</i>(<i>t</i>) = ${Ac} cos(2&pi; &middot; ${fc} &middot; <i>t</i> + ${mu} cos(2&pi; &middot; ${fm} &middot; <i>t</i>))`;
+                    break;
+            }
+            
+            dom.mathEquation.innerHTML = `
+                <div style="font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; font-weight: 500; color: #f0f6fc; margin-bottom: 6px; letter-spacing: 0.5px;">${formulaHTML}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); font-family: var(--font-mono); opacity: 0.8;">Active values: ${valuesHTML}</div>
+            `;
+        }
+
+        // DUAL BINDING HOOKS: Slider Inputs & Number Input Text Box Synchronization
+        function setupDualBinding(slider, numInput, stateField, decimalPlaces, minVal, maxVal) {
+            slider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                state[stateField] = val;
+                numInput.value = val.toFixed(decimalPlaces);
+                updateEquationText();
+                updateTelemetry();
+            });
+            numInput.addEventListener('input', (e) => {
+                let val = parseFloat(e.target.value);
+                if (!isNaN(val)) {
+                    val = Math.max(minVal, Math.min(maxVal, val));
+                    state[stateField] = val;
+                    slider.value = val;
+                    updateEquationText();
+                    updateTelemetry();
+                }
+            });
+            numInput.addEventListener('blur', () => {
+                numInput.value = state[stateField].toFixed(decimalPlaces);
+            });
+        }
+
+        setupDualBinding(dom.sliderAc, dom.inputAc, 'ac', 2, 0.01, 10.0);
+        setupDualBinding(dom.sliderFc, dom.inputFc, 'fc', 0, 1, 500);
+        setupDualBinding(dom.sliderAm, dom.inputAm, 'am', 2, 0.0, 10.0);
+        setupDualBinding(dom.sliderFm, dom.inputFm, 'fm', 1, 0.2, 50.0);
+        setupDualBinding(dom.sliderNoise, dom.inputNoise, 'noise', 2, 0.0, 0.5);
+        dom.sliderTimeSpeed.addEventListener('input', (e) => { state.timeSpeed = parseFloat(e.target.value); });
+
+        // Telemetry backwards-calculation event listeners
+        dom.inputPc.addEventListener('input', (e) => {
+            let pc = parseFloat(e.target.value);
+            if (!isNaN(pc) && pc >= 0) {
+                if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                    dom.inputPc.value = "0.00";
+                    return;
+                }
+                
+                let ac;
+                if (state.mode === 'FM' || state.mode === 'PM') {
+                    const J0 = besselJ(0, state.mu);
+                    if (Math.abs(J0) < 1e-4) {
+                        ac = Math.sqrt(2 * pc) / 0.01;
+                    } else {
+                        ac = Math.sqrt(2 * pc) / Math.abs(J0);
+                    }
+                } else { // AM
+                    ac = Math.sqrt(2 * pc);
+                }
+                
+                state.ac = Math.max(0.01, Math.min(10.0, ac));
+                dom.sliderAc.value = state.ac;
+                dom.inputAc.value = state.ac.toFixed(2);
+                
+                updateEquationText();
+                updateTelemetry();
+            }
+        });
+
+        dom.inputPsb.addEventListener('input', (e) => {
+            let psb = parseFloat(e.target.value);
+            if (!isNaN(psb) && psb >= 0) {
+                const Ac = state.ac;
+                const Am = state.am;
+                
+                let mu;
+                if (state.mode === 'AM') {
+                    const Pc = (Ac * Ac) / 2.0;
+                    if (Pc > 0) {
+                        mu = Math.sqrt((2.0 * psb) / Pc);
+                    } else {
+                        mu = 0;
+                    }
+                } else if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                    if (Am * Ac > 0) {
+                        mu = Math.sqrt((8.0 * psb) / (Am * Am * Ac * Ac));
+                    } else {
+                        mu = 0;
+                    }
+                } else if (state.mode === 'FM' || state.mode === 'PM') {
+                    const Pt = (Ac * Ac) / 2.0;
+                    if (Pt > 0) {
+                        const targetEta = Math.min(0.999, Math.max(0.0, psb / Pt));
+                        mu = solveBetaFromEfficiency(targetEta);
+                    } else {
+                        mu = 0;
+                    }
+                }
+                
+                const maxLim = state.mode === 'FM' ? 10.0 : (state.mode === 'PM' ? 5.00 : 2.0);
+                state.mu = Math.max(0.0, Math.min(maxLim, mu));
+                dom.sliderModIndex.value = state.mu;
+                const dec = state.mode === 'FM' ? 1 : 2;
+                dom.inputModIndex.value = state.mu.toFixed(dec);
+                
+                updateEquationText();
+                updateTelemetry();
+            }
+        });
+
+        dom.inputPt.addEventListener('input', (e) => {
+            let pt = parseFloat(e.target.value);
+            if (!isNaN(pt) && pt >= 0) {
+                let ac;
+                if (state.mode === 'AM') {
+                    ac = Math.sqrt((2.0 * pt) / (1.0 + (state.mu * state.mu) / 2.0));
+                } else if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                    const muAm = state.mu * state.am;
+                    if (muAm > 0) {
+                        ac = Math.sqrt(8.0 * pt) / muAm;
+                    } else {
+                        ac = Math.sqrt(2.0 * pt);
+                    }
+                } else if (state.mode === 'FM' || state.mode === 'PM') {
+                    ac = Math.sqrt(2.0 * pt);
+                }
+                
+                state.ac = Math.max(0.01, Math.min(10.0, ac));
+                dom.sliderAc.value = state.ac;
+                dom.inputAc.value = state.ac.toFixed(2);
+                
+                updateEquationText();
+                updateTelemetry();
+            }
+        });
+
+        dom.inputEfficiency.addEventListener('input', (e) => {
+            let effPercent = parseFloat(e.target.value);
+            if (!isNaN(effPercent)) {
+                let eff = Math.min(99.9, Math.max(0.0, effPercent / 100.0));
+                
+                let mu = state.mu;
+                if (state.mode === 'AM') {
+                    if (eff < 1.0) {
+                        mu = Math.sqrt((2.0 * eff) / (1.0 - eff));
+                    } else {
+                        mu = 2.0;
+                    }
+                } else if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                    dom.inputEfficiency.value = "100.0";
+                    return;
+                } else if (state.mode === 'FM' || state.mode === 'PM') {
+                    mu = solveBetaFromEfficiency(eff);
+                }
+                
+                const maxLim = state.mode === 'FM' ? 10.0 : (state.mode === 'PM' ? 5.00 : 2.0);
+                state.mu = Math.max(0.0, Math.min(maxLim, mu));
+                dom.sliderModIndex.value = state.mu;
+                const dec = state.mode === 'FM' ? 1 : 2;
+                dom.inputModIndex.value = state.mu.toFixed(dec);
+                
+                updateEquationText();
+                updateTelemetry();
+            }
+        });
+
+        dom.inputBw.addEventListener('input', (e) => {
+            let bw = parseFloat(e.target.value);
+            if (!isNaN(bw) && bw >= 0) {
+                let fm;
+                if (state.mode === 'FM' || state.mode === 'PM') {
+                    fm = bw / (2.0 * (state.mu + 1.0));
+                } else if (state.mode === 'SSB') {
+                    fm = bw;
+                } else { // AM or DSB-SC
+                    fm = bw / 2.0;
+                }
+                
+                state.fm = Math.max(0.2, Math.min(50.0, fm));
+                dom.sliderFm.value = state.fm;
+                dom.inputFm.value = state.fm.toFixed(1);
+                
+                updateEquationText();
+                updateTelemetry();
+            }
+        });
+
+        function setupTelemetryBlur(inputEl, dec) {
+            inputEl.addEventListener('blur', () => {
+                let val = parseFloat(inputEl.value);
+                if (!isNaN(val)) {
+                    inputEl.value = val.toFixed(dec);
+                }
+            });
+        }
+        setupTelemetryBlur(dom.inputPc, 2);
+        setupTelemetryBlur(dom.inputPsb, 2);
+        setupTelemetryBlur(dom.inputPt, 2);
+        setupTelemetryBlur(dom.inputEfficiency, 1);
+        setupTelemetryBlur(dom.inputBw, 2);
+
+        // Special handling for dynamic modulation index range limits
+        dom.sliderModIndex.addEventListener('input', (e) => {
+            state.mu = parseFloat(e.target.value);
+            const dec = state.mode === 'FM' ? 1 : 2;
+            dom.inputModIndex.value = state.mu.toFixed(dec);
+            updateEquationText();
+            updateTelemetry();
+        });
+        dom.inputModIndex.addEventListener('input', (e) => {
+            let val = parseFloat(e.target.value);
+            if (!isNaN(val)) {
+                const maxLim = state.mode === 'FM' ? 10.0 : (state.mode === 'PM' ? 5.00 : 2.0);
+                val = Math.max(0.0, Math.min(maxLim, val));
+                state.mu = val;
+                dom.sliderModIndex.value = val;
+                updateEquationText();
+                updateTelemetry();
+            }
+        });
+        dom.inputModIndex.addEventListener('blur', () => {
+            const dec = state.mode === 'FM' ? 1 : 2;
+            dom.inputModIndex.value = state.mu.toFixed(dec);
+        });
+
+        // Select mode tabs
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.mode = btn.dataset.mode;
+                
+                if (state.mode === 'AM') {
+                    state.mu = 0.5;
+                } else if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                    state.mu = 1.0;
+                } else if (state.mode === 'FM') {
+                    state.mu = 3.0;
+                } else if (state.mode === 'PM') {
+                    state.mu = 1.57;
+                }
+                
+                dom.sliderModIndex.value = state.mu;
+                updateLabels();
+                updateEquationText();
+            });
+        });
+
+        // Trace vis toggles
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                const trace = btn.dataset.trace;
+                if (trace === 'message') state.showMsg = btn.classList.contains('active');
+                if (trace === 'carrier') state.showCar = btn.classList.contains('active');
+                if (trace === 'modulated') state.showMod = btn.classList.contains('active');
+            });
+        });
+
+        // Play/Pause/Reset clock
+        dom.btnPlayPause.addEventListener('click', () => {
+            state.isPlaying = !state.isPlaying;
+            dom.btnPlayPause.classList.toggle('active', !state.isPlaying);
+            dom.playIcon.innerText = state.isPlaying ? '⏸' : '▶';
+        });
+        dom.btnReset.addEventListener('click', () => {
+            state.time = 0.0;
+        });
+
+        // Instantaneous AWGN Signal
+        function getGaussianNoise() {
+            if (state.noise <= 0) return 0;
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random(); 
+            while(v === 0) v = Math.random();
+            return state.noise * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        // Instantaneous Signal Evaluators (With Angular Frequency ωt syntax)
+        function m_t(t_val) {
+            const omega_m = 2.0 * Math.PI * state.fm;
+            return state.am * Math.cos(omega_m * t_val);
+        }
+
+        function c_t(t_val) {
+            const omega_c = 2.0 * Math.PI * state.fc;
+            return state.ac * Math.cos(omega_c * t_val);
+        }
+
+        function s_t(t_val) {
+            const omega_c = 2.0 * Math.PI * state.fc;
+            const omega_m = 2.0 * Math.PI * state.fm;
+            const noise = getGaussianNoise();
+            
+            switch (state.mode) {
+                case 'AM':
+                    return state.ac * (1.0 + state.mu * Math.cos(omega_m * t_val)) * Math.cos(omega_c * t_val) + noise;
+                
+                case 'DSB-SC':
+                    return state.mu * m_t(t_val) * Math.cos(omega_c * t_val) + noise;
+                
+                case 'SSB':
+                    return 0.5 * state.ac * state.am * state.mu * Math.cos((omega_c + omega_m) * t_val) + noise;
+                
+                case 'FM':
+                    return state.ac * Math.cos(omega_c * t_val + state.mu * Math.sin(omega_m * t_val)) + noise;
+                
+                case 'PM':
+                    return state.ac * Math.cos(omega_c * t_val + state.mu * Math.cos(omega_m * t_val)) + noise;
+                
+                default:
+                    return 0;
+            }
+        }
+
+        // Calculations for Telemetry
+        function updateTelemetry() {
+            let Pc = 0, Psb = 0, Pt = 0, efficiency = 0, bw = 0;
+            
+            const Ac = state.ac;
+            const Am = state.am;
+            const mu = state.mu;
+            const fm = state.fm;
+
+            if (state.mode === 'FM' || state.mode === 'PM') {
+                dom.cardFmDev.style.display = 'flex';
+                dom.telemetryLabelBw.innerText = "Carson: 2(f_m + Δf)";
+            } else {
+                dom.telemetryLabelBw.innerText = "DSB Width: 2 * f_m";
+            }
+
+            switch(state.mode) {
+                case 'AM':
+                    Pc = (Ac * Ac) / 2.0;
+                    Psb = (mu * mu * Pc) / 2.0;
+                    Pt = Pc + Psb;
+                    efficiency = (Psb / Pt) * 100.0;
+                    bw = 2.0 * fm;
+                    
+                    if (mu < 1.0) {
+                        dom.telemetryStatus.innerText = "UNDERMODULATION";
+                        dom.badgeModStatus.innerText = `μ = ${mu.toFixed(2)} (< 1.0)`;
+                        dom.badgeModStatus.className = "badge-status badge-undermod";
+                    } else if (Math.abs(mu - 1.0) < 0.01) {
+                        dom.telemetryStatus.innerText = "CRITICAL MODULATION";
+                        dom.badgeModStatus.innerText = `μ = 1.00 (100%)`;
+                        dom.badgeModStatus.className = "badge-status badge-critical";
+                    } else {
+                        dom.telemetryStatus.innerText = "OVERMODULATION";
+                        dom.badgeModStatus.innerText = `μ = ${mu.toFixed(2)} (> 1.0)`;
+                        dom.badgeModStatus.className = "badge-status badge-overmod";
+                    }
+                    break;
+                    
+                case 'DSB-SC':
+                    Pc = 0; 
+                    Psb = (mu * mu * Am * Am * Ac * Ac) / 8.0;
+                    Pt = Psb;
+                    efficiency = 100.0;
+                    bw = 2.0 * fm;
+                    dom.telemetryStatus.innerText = "CARRIER SUPPRESSED";
+                    dom.badgeModStatus.innerText = `100% Sideband Efficiency`;
+                    dom.badgeModStatus.className = "badge-status badge-undermod";
+                    break;
+
+                case 'SSB':
+                    Pc = 0; 
+                    Psb = (mu * mu * Am * Am * Ac * Ac) / 8.0; 
+                    Pt = Psb;
+                    efficiency = 100.0;
+                    bw = fm;
+                    dom.telemetryStatus.innerText = "SINGLE SIDEBAND (USB)";
+                    dom.badgeModStatus.innerText = `100% Spectral Efficiency`;
+                    dom.badgeModStatus.className = "badge-status badge-undermod";
+                    break;
+
+                case 'FM':
+                    Pc = (Ac * Ac) / 2.0;
+                    Pt = Pc; 
+                    const J0 = besselJ(0, mu);
+                    const Pc_mod = (J0 * J0 * Ac * Ac) / 2.0;
+                    Psb = Pt - Pc_mod;
+                    efficiency = (Psb / Pt) * 100.0;
+                    const deltaF = mu * fm; 
+                    bw = 2.0 * (deltaF + fm);
+                    
+                    dom.telemetryStatus.innerText = "FREQUENCY MODULATION";
+                    dom.badgeModStatus.innerText = `β = ${mu.toFixed(1)}`;
+                    dom.badgeModStatus.className = "badge-status badge-undermod";
+                    break;
+
+                case 'PM':
+                    Pc = (Ac * Ac) / 2.0;
+                    Pt = Pc;
+                    const J0_pm = besselJ(0, mu);
+                    const Pc_mod_pm = (J0_pm * J0_pm * Ac * Ac) / 2.0;
+                    Psb = Pt - Pc_mod_pm;
+                    efficiency = (Psb / Pt) * 100.0;
+                    bw = 2.0 * (mu + 1.0) * fm; 
+                    
+                    dom.telemetryStatus.innerText = "PHASE MODULATION";
+                    dom.badgeModStatus.innerText = `Δφ = ${mu.toFixed(2)} rad`;
+                    dom.badgeModStatus.className = "badge-status badge-undermod";
+                    break;
+            }
+
+            if (document.activeElement !== dom.inputPc) dom.inputPc.value = Pc.toFixed(2);
+            if (document.activeElement !== dom.inputPsb) dom.inputPsb.value = Psb.toFixed(2);
+            if (document.activeElement !== dom.inputPt) dom.inputPt.value = Pt.toFixed(2);
+            if (document.activeElement !== dom.inputEfficiency) dom.inputEfficiency.value = efficiency.toFixed(1);
+            if (document.activeElement !== dom.inputBw) dom.inputBw.value = bw.toFixed(2);
+        }
+
+        // Draw background grid lines on plots
+        function drawGrid(ctx, w, h, colors) {
+            ctx.save();
+            ctx.strokeStyle = colors.grid;
+            ctx.lineWidth = 1;
+            
+            const step = 40;
+            // vertical gridlines
+            for (let x = 0; x < w; x += step) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+            // horizontal gridlines
+            for (let y = 0; y < h; y += step) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+            
+            // Major axes
+            ctx.strokeStyle = colors.axis;
+            ctx.lineWidth = 1.5;
+            
+            // Center horizontal reference line
+            ctx.beginPath();
+            ctx.moveTo(0, h / 2);
+            ctx.lineTo(w, h / 2);
+            ctx.stroke();
+            
+            // Left boundary vertical line
+            ctx.beginPath();
+            ctx.moveTo(60, 0);
+            ctx.lineTo(60, h);
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        // Render Time-Domain Waves
+        function drawTimeDomain() {
+            const canvas = dom.timeDomainCanvas;
+            const ctx = ctxs.time;
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
+            const colors = getThemeColors();
+            
+            ctx.clearRect(0, 0, w, h);
+            drawGrid(ctx, w, h, colors);
+            
+            const originX = 60;
+            const drawW = w - originX;
+            const midY = h / 2;
+            
+            // Zoom X affects time span displayed. We scale it dynamically based on message frequency
+            // so that we always see about 3 cycles of the message wave, preventing high-frequency carrier aliasing.
+            const timeSpan = (3.0 / state.fm) / state.zoomTimeX; 
+            
+            // Draw axes text info
+            ctx.save();
+            ctx.fillStyle = colors.text;
+            ctx.font = '9px var(--font-mono)';
+            ctx.textAlign = 'right';
+            
+            // Dynamically scale voltage range to fit maximum amplitude cleanly
+            let peak = Math.max(state.ac, state.am);
+            if (state.showMod) {
+                if (state.mode === 'AM') peak = Math.max(peak, state.ac * (1 + state.mu));
+                else if (state.mode === 'DSB-SC') peak = Math.max(peak, state.mu * state.am);
+                else if (state.mode === 'SSB') peak = Math.max(peak, 0.5 * state.ac * state.am * state.mu);
+                else if (state.mode === 'FM' || state.mode === 'PM') peak = Math.max(peak, state.ac);
+            }
+            const maxVolts = Math.max(4, Math.ceil(peak));
+            
+            // Zoom Y affects voltage step scaling
+            const voltPxStep = (h / 2) / (maxVolts + 0.5) * state.zoomTimeY;
+            
+            // Clean dynamic tick spacing
+            let tickStep = 1;
+            if (maxVolts > 15) tickStep = 5;
+            else if (maxVolts > 8) tickStep = 2;
+            
+            for (let v = -maxVolts; v <= maxVolts; v += tickStep) {
+                if (v === 0) continue;
+                const y = midY - v * voltPxStep;
+                if (y > 0 && y < h - 10) {
+                    ctx.fillText(`${v > 0 ? '+' : ''}${v}V`, originX - 8, y + 3);
+                    ctx.strokeStyle = colors.grid;
+                    ctx.beginPath();
+                    ctx.moveTo(originX - 4, y);
+                    ctx.lineTo(originX, y);
+                    ctx.stroke();
+                }
+            }
+            
+            ctx.textAlign = 'center';
+            const numTicks = 5;
+            let decimals = 2;
+            if (timeSpan < 0.1) decimals = 4;
+            else if (timeSpan < 0.5) decimals = 3;
+            
+            for (let i = 0; i <= numTicks; i++) {
+                const fraction = i / numTicks;
+                const x = originX + fraction * drawW;
+                const timeSec = state.time + fraction * timeSpan;
+                ctx.fillText(`${timeSec.toFixed(decimals)}s`, x, h - 8);
+            }
+            ctx.restore();
+
+            // Trace drawer (FIX: draws solid proper waves to avoid blurry/dashed aliasing of high frequencies)
+            function plotTrace(valueFunc, color, isVisible, thickness = 1.5) {
+                if (!isVisible) return;
+                
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = thickness;
+                ctx.lineJoin = 'round';
+                
+                ctx.beginPath();
+                let first = true;
+                for (let xPx = originX; xPx < w; xPx++) {
+                    const fraction = (xPx - originX) / drawW;
+                    const evalTime = state.time + fraction * timeSpan;
+                    const volt = valueFunc(evalTime);
+                    const yPx = midY - volt * voltPxStep;
+                    
+                    if (first) {
+                        ctx.moveTo(xPx, yPx);
+                        first = false;
+                    } else {
+                        ctx.lineTo(xPx, yPx);
+                    }
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // Draw Message, Carrier, Modulated waves (Crisp solid lines of varying thicknesses)
+            plotTrace(m_t, colors.msg, state.showMsg, 1.5); // Solid Emerald
+            plotTrace(c_t, colors.car, state.showCar, 1.0); // Thinner solid Cyan
+            plotTrace(s_t, colors.mod, state.showMod, 2.5); // Bold solid Orange
+
+            // Draw dynamic AM envelope boundaries
+            if (state.mode === 'AM' && state.showMod) {
+                ctx.save();
+                ctx.strokeStyle = colors.mod;
+                ctx.lineWidth = 1.2;
+                ctx.setLineDash([4, 4]);
+                ctx.globalAlpha = 0.5;
+                
+                // Upper boundary
+                ctx.beginPath();
+                for (let xPx = originX; xPx < w; xPx++) {
+                    const fraction = (xPx - originX) / drawW;
+                    const evalTime = state.time + fraction * timeSpan;
+                    const env = state.ac * (1.0 + state.mu * Math.cos(2.0 * Math.PI * state.fm * evalTime));
+                    const yPx = midY - env * voltPxStep;
+                    if (xPx === originX) ctx.moveTo(xPx, yPx); else ctx.lineTo(xPx, yPx);
+                }
+                ctx.stroke();
+                
+                // Lower boundary
+                ctx.beginPath();
+                for (let xPx = originX; xPx < w; xPx++) {
+                    const fraction = (xPx - originX) / drawW;
+                    const evalTime = state.time + fraction * timeSpan;
+                    const env = -state.ac * (1.0 + state.mu * Math.cos(2.0 * Math.PI * state.fm * evalTime));
+                    const yPx = midY - env * voltPxStep;
+                    if (xPx === originX) ctx.moveTo(xPx, yPx); else ctx.lineTo(xPx, yPx);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // Render Frequency-Domain Spectrum
+        function drawFrequencyDomain() {
+            const canvas = dom.freqDomainCanvas;
+            const ctx = ctxs.freq;
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
+            const colors = getThemeColors();
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            const originX = 60;
+            const bottomY = h - 30;
+            const drawW = w - originX - 20;
+            const drawH = bottomY - 20;
+            
+            ctx.save();
+            ctx.strokeStyle = colors.axis;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(originX, bottomY);
+            ctx.lineTo(w - 10, bottomY);
+            ctx.moveTo(originX, 10);
+            ctx.lineTo(originX, bottomY);
+            ctx.stroke();
+            ctx.restore();
+ 
+            // Scale maxFreq dynamically based on Carrier Frequency so it fits comfortably.
+            const baseMaxFreq = Math.max(120.0, state.fc * 1.5 + state.fm * 5);
+            const maxFreq = baseMaxFreq / state.zoomFreqX;
+            
+            // Calculate a nice, clean frequency label step
+            let labelStep = 20.0;
+            if (maxFreq > 1000) labelStep = 200.0;
+            else if (maxFreq > 500) labelStep = 100.0;
+            else if (maxFreq > 200) labelStep = 50.0;
+            else if (maxFreq > 100) labelStep = 20.0;
+            else if (maxFreq > 50) labelStep = 10.0;
+            else labelStep = 5.0;
+            
+            // Draw vertical grid lines and frequency labels aligned
+            ctx.save();
+            ctx.fillStyle = colors.text;
+            ctx.font = '9px var(--font-mono)';
+            ctx.textAlign = 'center';
+            
+            for (let f = 0; f <= maxFreq + 0.1; f += labelStep) {
+                const x = originX + (f / maxFreq) * drawW;
+                if (x >= originX && x <= w - 10) {
+                    ctx.fillText(`${f.toFixed(0)}Hz`, x, bottomY + 12);
+                    
+                    // Draw vertical grid line
+                    ctx.strokeStyle = colors.grid;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x, 15);
+                    ctx.lineTo(x, bottomY);
+                    ctx.stroke();
+                }
+            }
+            ctx.fillText("Frequency (f)", originX + drawW/2, bottomY + 25);
+            ctx.restore();
+            
+            // Calculate maxAmp dynamically based on state
+            let peakAmp = state.ac;
+            if (state.mode === 'DSB-SC' || state.mode === 'SSB') {
+                peakAmp = (state.mu * state.am * state.ac) / 4.0;
+            } else if (state.mode === 'AM') {
+                peakAmp = Math.max(state.ac, (state.mu * state.ac) / 2.0);
+            }
+            const maxAmp = Math.max(4.0, Math.ceil(peakAmp));
+            
+            // Draw horizontal grid lines and amplitude labels aligned
+            ctx.save();
+            ctx.fillStyle = colors.text;
+            ctx.font = '9px var(--font-mono)';
+            ctx.textAlign = 'right';
+            
+            let ampStep = 1.0;
+            if (maxAmp > 20) ampStep = 5.0;
+            else if (maxAmp > 8) ampStep = 2.0;
+            
+            for (let a = 0; a <= maxAmp + 0.01; a += ampStep) {
+                const yPos = bottomY - (a / maxAmp) * drawH * state.zoomFreqY;
+                if (yPos >= 15 && yPos <= bottomY) {
+                    ctx.fillText(`${a.toFixed(1)}V`, originX - 8, yPos + 3);
+                    
+                    // Draw horizontal grid line
+                    ctx.strokeStyle = colors.grid;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(originX, yPos);
+                    ctx.lineTo(w - 20, yPos);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+
+            // Spikes calculation
+            const spikes = [];
+            const Ac = state.ac;
+            const Am = state.am;
+            const fc = state.fc;
+            const fm = state.fm;
+            const mu = state.mu;
+            
+            switch(state.mode) {
+                case 'AM':
+                    spikes.push({ f: fc, amp: Ac, label: 'f_c', color: colors.car });
+                    const amSb = (mu * Ac) / 2.0;
+                    if (amSb > 0.01) {
+                        spikes.push({ f: fc - fm, amp: amSb, label: 'f_c - f_m', color: colors.msg });
+                        spikes.push({ f: fc + fm, amp: amSb, label: 'f_c + f_m', color: colors.msg });
+                    }
+                    break;
+                    
+                case 'DSB-SC':
+                    const dsbSb = (mu * Am * Ac) / 4.0;
+                    if (dsbSb > 0.01) {
+                        spikes.push({ f: fc - fm, amp: dsbSb, label: 'f_c - f_m', color: colors.msg });
+                        spikes.push({ f: fc + fm, amp: dsbSb, label: 'f_c + f_m', color: colors.msg });
+                    }
+                    break;
+                    
+                case 'SSB':
+                    const ssbSb = (mu * Am * Ac) / 4.0;
+                    if (ssbSb > 0.01) {
+                        spikes.push({ f: fc + fm, amp: ssbSb, label: 'f_c + f_m (USB)', color: colors.msg });
+                    }
+                    break;
+                    
+                case 'FM':
+                case 'PM':
+                    const limit = 8;
+                    for (let n = -limit; n <= limit; n++) {
+                        const freq = fc + n * fm;
+                        if (freq < 0) continue;
+                        
+                        const J_n = besselJ(n, mu);
+                        const amp = Math.abs(J_n) * Ac;
+                        if (amp > 0.02) {
+                            const isCarrier = (n === 0);
+                            const label = isCarrier ? 'f_c' : (n > 0 ? `f_c + ${n}f_m` : `f_c - ${Math.abs(n)}f_m`);
+                            spikes.push({ 
+                                f: freq, 
+                                amp: amp, 
+                                label: label, 
+                                color: isCarrier ? colors.car : colors.msg 
+                            });
+                        }
+                    }
+                    break;
+            }
+
+            // Draw noise floor spectrum
+            if (state.noise > 0) {
+                ctx.save();
+                ctx.strokeStyle = state.scopeTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                let first = true;
+                for (let x = originX; x < w - 20; x++) {
+                    const noiseVal = Math.random() * state.noise * 0.3;
+                    const y = bottomY - (noiseVal / maxAmp) * drawH * state.zoomFreqY;
+                    if (first) { ctx.moveTo(x, y); first = false; } else { ctx.lineTo(x, y); }
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // Draw spikes (using solid proper resolution lines)
+            let activeHoverSpike = null;
+            spikes.forEach(s => {
+                const x = originX + (s.f / maxFreq) * drawW;
+                // Zoom Y Y-scaling
+                const ampHeight = (s.amp / maxAmp) * drawH * state.zoomFreqY;
+                const y = bottomY - ampHeight;
+                
+                if (x < originX || x > w - 10) return;
+                
+                if (state.hoverFreq !== null) {
+                    const dist = Math.abs(x - state.hoverFreq);
+                    if (dist < 10) {
+                        activeHoverSpike = s;
+                    }
+                }
+
+                ctx.save();
+                ctx.strokeStyle = s.color;
+                ctx.lineWidth = 2.0;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, bottomY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                
+                ctx.fillStyle = s.color;
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = colors.text;
+                ctx.font = '8px var(--font-mono)';
+                ctx.textAlign = 'center';
+                ctx.fillText(s.label, x, y - 8);
+                
+                ctx.restore();
+            });
+
+            // Display tooltip
+            if (activeHoverSpike) {
+                const tooltipX = originX + (activeHoverSpike.f / maxFreq) * drawW;
+                const tooltipY = bottomY - (activeHoverSpike.amp / maxAmp) * drawH * state.zoomFreqY;
+                
+                dom.freqTooltip.style.display = 'block';
+                dom.freqTooltip.style.left = `${tooltipX + 15}px`;
+                dom.freqTooltip.style.top = `${tooltipY - 10}px`;
+                dom.freqTooltip.innerHTML = `
+                    Freq: ${activeHoverSpike.f.toFixed(2)} Hz<br>
+                    Amp: ${activeHoverSpike.amp.toFixed(2)} V
+                `;
+            } else {
+                dom.freqTooltip.style.display = 'none';
+            }
+        }
+
+        // Draw Phasor Diagram
+        function drawPhasorDiagram() {
+            const canvas = dom.phasorCanvas;
+            const ctx = ctxs.phasor;
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
+            const colors = getThemeColors();
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            const cx = w / 2;
+            const cy = h / 2;
+            const scale = 22; 
+            
+            ctx.save();
+            ctx.strokeStyle = colors.grid;
+            ctx.lineWidth = 1;
+            for (let r = 1; r <= 3; r++) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, r * scale, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            ctx.beginPath();
+            ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+            ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+            ctx.stroke();
+            ctx.restore();
+
+            const Ac = state.ac;
+            const Am = state.am;
+            const fc = state.fc;
+            const fm = state.fm;
+            const mu = state.mu;
+            const t = state.time;
+
+            const wc_t = 2.0 * Math.PI * fc * t;
+            const wm_t = 2.0 * Math.PI * fm * t;
+
+            function drawVector(startX, startY, len, angle, color, strokeW = 2.0) {
+                const endX = startX + len * Math.cos(angle);
+                const endY = startY - len * Math.sin(angle); 
+                
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.fillStyle = color;
+                ctx.lineWidth = strokeW;
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                const arrowSize = 4;
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                    endX - arrowSize * Math.cos(angle - Math.PI / 6),
+                    endY + arrowSize * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.lineTo(
+                    endX - arrowSize * Math.cos(angle + Math.PI / 6),
+                    endY + arrowSize * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+                return { x: endX, y: endY };
+            }
+
+            switch(state.mode) {
+                case 'AM':
+                    const tipCar = drawVector(cx, cy, Ac * scale, wc_t, colors.car);
+                    const sbLen = (mu * Ac / 2.0) * scale;
+                    const tipUsb = drawVector(tipCar.x, tipCar.y, sbLen, wc_t + wm_t, colors.msg, 1.5);
+                    const tipLsb = drawVector(tipUsb.x, tipUsb.y, sbLen, wc_t - wm_t, colors.msg, 1.5);
+                    
+                    ctx.setLineDash([2, 2]);
+                    drawVector(cx, cy, Math.sqrt(Math.pow(tipLsb.x - cx, 2) + Math.pow(tipLsb.y - cy, 2)) / scale * scale, wc_t, colors.mod, 1.0);
+                    break;
+                    
+                case 'DSB-SC':
+                    const dsbSbLen = (mu * Am * Ac / 4.0) * scale;
+                    const dsbUsb = drawVector(cx, cy, dsbSbLen, wc_t + wm_t, colors.msg);
+                    const dsbLsb = drawVector(dsbUsb.x, dsbUsb.y, dsbSbLen, wc_t - wm_t, colors.msg);
+                    
+                    ctx.setLineDash([2, 2]);
+                    drawVector(cx, cy, Math.sqrt(Math.pow(dsbLsb.x - cx, 2) + Math.pow(dsbLsb.y - cy, 2)) / scale * scale, dsbLsb.y > cy ? wc_t + Math.PI : wc_t, colors.mod, 1.0);
+                    break;
+                    
+                case 'SSB':
+                    const ssbSbLen = (mu * Am * Ac / 4.0) * scale;
+                    drawVector(cx, cy, ssbSbLen, wc_t + wm_t, colors.msg);
+                    break;
+
+                case 'FM':
+                    const phaseFm = wc_t + mu * Math.sin(wm_t);
+                    drawVector(cx, cy, Ac * scale, phaseFm, colors.car);
+                    break;
+                    
+                case 'PM':
+                    const phasePm = wc_t + mu * Math.cos(wm_t);
+                    drawVector(cx, cy, Ac * scale, phasePm, colors.car);
+                    break;
+            }
+        }
+
+        // Frequency Mouse tracking
+        dom.freqDomainCanvas.addEventListener('mousemove', (e) => {
+            const rect = dom.freqDomainCanvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            state.hoverFreq = (e.clientX - rect.left) * dpr;
+            state.hoverAmp = (e.clientY - rect.top) * dpr;
+        });
+
+        dom.freqDomainCanvas.addEventListener('mouseleave', () => {
+            state.hoverFreq = null;
+            state.hoverAmp = null;
+            dom.freqTooltip.style.display = 'none';
+        });
+
+        // Animation Loop passing global timeline t accumulation
+        let lastTime = 0;
+        function renderLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const delta = (timestamp - lastTime) / 1000.0;
+            lastTime = timestamp;
+            
+            if (state.isPlaying) {
+                // Accumulate clock timeline
+                state.time += delta * state.timeSpeed * 0.15;
+            }
+            
+            // Run rendering functions
+            drawTimeDomain();
+            drawFrequencyDomain();
+            drawPhasorDiagram();
+            
+            // Run telemetry computations
+            updateTelemetry();
+            
+            requestAnimationFrame(renderLoop);
+        }
+
+        // Initial launch configs
+        updateLabels();
+        updateEquationText();
+        requestAnimationFrame(renderLoop);
+    </script>
+</body>
+</html>
